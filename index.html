@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>BriefAssistent DE</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <meta name="theme-color" content="#1e3a8a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BriefAssistent">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      body * { visibility: hidden; }
+      #printable-letter, #printable-letter * { visibility: visible; }
+      #printable-letter {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 20mm;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-12 select-none">
+
+  <header class="bg-blue-900 text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center gap-2.5">
+        <img src="icon.svg" alt="Logo" class="w-8 h-8 rounded-lg shadow-sm">
+        <div>
+          <h1 class="text-base font-bold tracking-tight leading-tight">BriefAssistent DE</h1>
+          <p class="text-[10px] text-blue-200">Asystent pism urzędowych DIN 5008</p>
+        </div>
+      </div>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+        Darmowy
+      </span>
+    </div>
+  </header>
+
+  <main class="max-w-2xl mx-auto px-4 py-5 space-y-5">
+
+    <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+      <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+        <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">1</span>
+        Wgraj zdjęcie otrzymanego pisma
+      </h2>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <label class="flex flex-col items-center justify-center border-2 border-dashed border-blue-300 bg-blue-50/40 hover:bg-blue-50 rounded-xl p-4 cursor-pointer transition text-center active:scale-[0.98]">
+          <span class="text-3xl mb-1">📸</span>
+          <span class="text-xs font-semibold text-blue-950">Aparat w telefonie</span>
+          <span class="text-[10px] text-blue-600 mt-0.5">Zrób ostre zdjęcie pisma</span>
+          <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleFileSelect(event)">
+        </label>
+
+        <label class="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:bg-slate-50 rounded-xl p-4 cursor-pointer transition text-center active:scale-[0.98]">
+          <span class="text-3xl mb-1">📁</span>
+          <span class="text-xs font-semibold text-slate-800">Wybierz z galerii</span>
+          <span class="text-[10px] text-slate-500 mt-0.5">Pliki JPG, PNG</span>
+          <input type="file" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+        </label>
+      </div>
+
+      <div id="image-preview-container" class="hidden relative rounded-xl overflow-hidden border border-slate-200 bg-slate-900/5 max-h-52 flex items-center justify-center">
+        <img id="image-preview" src="" alt="Podgląd pisma" class="max-h-52 object-contain">
+        <button onclick="clearImage()" class="absolute top-2 right-2 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs">✕</button>
+      </div>
+
+      <div class="space-y-1">
+        <label class="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Co chcesz odpisać?</label>
+        <select id="user-intent" class="w-full text-xs rounded-xl border border-slate-300 p-3 bg-white focus:ring-2 focus:ring-blue-600 outline-none">
+          <option value="Fristverlaengerung">Prośba o przedłużenie terminu (brak czasu / choroba)</option>
+          <option value="Unterlagen_nachreichen">Deklaracja dosłania żądanych dokumentów</option>
+          <option value="Widerspruch">Oficjalny sprzeciw / odwołanie od decyzji (Widerspruch)</option>
+          <option value="Bestaetigung">Potwierdzenie odbioru i prośba o kontakt pisemny</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+        <div>
+          <label class="text-[11px] font-medium text-slate-500 block mb-1">Twoje Imię i Nazwisko:</label>
+          <input type="text" id="user-name" placeholder="np. Jan Kowalski" class="w-full text-xs p-2.5 border rounded-lg outline-none focus:border-blue-600">
+        </div>
+        <div>
+          <label class="text-[11px] font-medium text-slate-500 block mb-1">Twój adres w Niemczech:</label>
+          <input type="text" id="user-address" placeholder="np. Musterstraße 12, 50667 Köln" class="w-full text-xs p-2.5 border rounded-lg outline-none focus:border-blue-600">
+        </div>
+      </div>
+
+      <button id="btn-analyze" onclick="processDocument()" class="w-full py-3.5 bg-blue-700 hover:bg-blue-800 active:scale-[0.99] text-white font-semibold text-sm rounded-xl shadow-md transition flex justify-center items-center gap-2">
+        <span>🚀</span> Przeanalizuj i przygotuj pismo
+      </button>
+    </section>
+
+    <div id="loading-spinner" class="hidden text-center py-8 space-y-3">
+      <div class="inline-block animate-spin rounded-full h-9 w-9 border-4 border-blue-700 border-t-transparent"></div>
+      <p class="text-xs font-semibold text-slate-700">Analiza pisma przez AI i generowanie odpowiedzi DIN 5008...</p>
+    </div>
+
+    <section id="results-section" class="hidden space-y-4">
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-xs flex items-center justify-center font-bold">2</span>
+            Kluczowe informacje z pisma
+          </h2>
+          <span id="badge-deadline" class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">Status</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <span class="text-slate-400 block font-medium text-[10px]">Instytucja / Nadawca:</span>
+            <span id="res-sender" class="font-bold text-slate-800">--</span>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <span class="text-slate-400 block font-medium text-[10px]">Numer sprawy (Aktenzeichen):</span>
+            <span id="res-aktenzeichen" class="font-mono font-bold text-blue-700">--</span>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <span class="text-slate-400 block font-medium text-[10px]">Ostateczny termin (Frist):</span>
+            <span id="res-deadline" class="font-bold text-red-600">--</span>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <span class="text-slate-400 block font-medium text-[10px]">Wymagane działanie:</span>
+            <span id="res-action" class="font-medium text-slate-800">--</span>
+          </div>
+        </div>
+
+        <div class="p-3.5 bg-blue-50/70 rounded-xl border border-blue-100 text-xs text-blue-950 leading-relaxed">
+          <span class="font-bold block mb-1">Co oznacza to pismo (po polsku):</span>
+          <p id="res-summary">--</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <h2 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs flex items-center justify-center font-bold">3</span>
+            Gotowa odpowiedź (Format DIN 5008)
+          </h2>
+          <div class="flex gap-2">
+            <button onclick="copyLetter()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition flex items-center gap-1">
+              📋 Kopiuj
+            </button>
+            <button onclick="window.print()" class="px-3 py-1.5 text-xs bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-medium shadow-sm transition flex items-center gap-1">
+              🖨️ Zapisz PDF
+            </button>
+          </div>
+        </div>
+
+        <div id="printable-letter" class="bg-white border border-slate-300 rounded-lg p-6 font-serif text-slate-900 text-xs leading-normal shadow-inner max-w-xl mx-auto space-y-3.5 select-text">
+          <div id="doc-sender-line" class="text-[9px] text-slate-500 border-b border-slate-300 pb-1 font-sans">
+            Jan Kowalski · Musterstraße 12 · 50667 Köln
+          </div>
+
+          <div id="doc-recipient" class="font-sans text-[11px] whitespace-pre-line pt-1 text-slate-800">
+            Nazwa Urzędu
+          </div>
+
+          <div id="doc-date" class="text-right text-[11px] font-sans text-slate-700 pt-2">
+            den 30.10.2026
+          </div>
+
+          <div id="doc-subject" class="font-bold font-sans text-xs text-slate-900 pt-1 border-l-2 border-blue-700 pl-2">
+            Ihr Schreiben – Aktenzeichen:
+          </div>
+
+          <div id="doc-body" class="text-[11px] text-justify space-y-2.5 pt-1 whitespace-pre-line leading-relaxed font-sans">
+            Sehr geehrte Damen und Herren,
+          </div>
+
+          <div class="pt-3 text-[11px] font-sans space-y-4">
+            <div>Mit freundlichen Grüßen</div>
+            <div id="doc-signature" class="font-medium pt-3 border-t border-slate-200 inline-block min-w-[130px]">
+              (Podpis)
+            </div>
+          </div>
+
+          <div id="doc-attachments" class="text-[9px] text-slate-500 font-sans pt-2">
+            Anlage(n)
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // =========================================================================
+    // WKLEJ TUTAJ SWÓJ ADRES Z CLOUDFLARE:
+    const WORKER_URL = "https://brief-api.easy-peasygmail.workers.dev";
+    // =========================================================================
+
+    let currentBase64Image = null;
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+
+          const MAX_SIZE = 1600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height && width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          } else if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressed = canvas.toDataURL('image/jpeg', 0.82);
+          currentBase64Image = compressed.split(',')[1];
+
+          document.getElementById('image-preview').src = compressed;
+          document.getElementById('image-preview-container').classList.remove('hidden');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearImage() {
+      currentBase64Image = null;
+      document.getElementById('image-preview-container').classList.add('hidden');
+      document.getElementById('image-preview').src = '';
+    }
+
+    async function processDocument() {
+      if (!currentBase64Image) {
+        alert('Proszę najpierw zrobić lub wybrać zdjęcie pisma urzędowego.');
+        return;
+      }
+
+      if (WORKER_URL.includes("twoj-worker")) {
+        alert('Wklej swój adres Cloudflare Worker w pliku index.html w zmiennej WORKER_URL.');
+        return;
+      }
+
+      const intent = document.getElementById('user-intent').value;
+      const userName = document.getElementById('user-name').value.trim() || 'Imię i Nazwisko';
+      const userAddress = document.getElementById('user-address').value.trim() || 'Musterstraße 1, 50667 Köln';
+
+      document.getElementById('btn-analyze').disabled = true;
+      document.getElementById('loading-spinner').classList.remove('hidden');
+      document.getElementById('results-section').classList.add('hidden');
+
+      try {
+        const response = await fetch(WORKER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: currentBase64Image,
+            intent: intent
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || 'Błąd połączenia z serwerem');
+        }
+
+        const result = await response.json();
+        renderResults(result, userName, userAddress);
+
+      } catch (err) {
+        alert('Błąd przetwarzania pisma: ' + err.message);
+      } finally {
+        document.getElementById('btn-analyze').disabled = false;
+        document.getElementById('loading-spinner').classList.add('hidden');
+      }
+    }
+
+    function renderResults(data, userName, userAddress) {
+      document.getElementById('res-sender').innerText = data.sender_name || 'Instytucja urzędowa';
+      document.getElementById('res-aktenzeichen').innerText = data.aktenzeichen || 'Nie odnaleziono w tekście';
+      document.getElementById('res-deadline').innerText = data.deadline || 'Brak ścisłej daty';
+      document.getElementById('res-action').innerText = data.required_action || 'Brak jednoznacznego żądania';
+      document.getElementById('res-summary').innerText = data.summary_pl || '';
+
+      const badge = document.getElementById('badge-deadline');
+      if (data.is_urgent) {
+        badge.className = "text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-red-100 text-red-700";
+        badge.innerText = "Pilny termin!";
+      } else {
+        badge.className = "text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700";
+        badge.innerText = "Bieg standardowy";
+      }
+
+      document.getElementById('doc-sender-line').innerText = `${userName} · ${userAddress}`;
+      document.getElementById('doc-recipient').innerText = data.din5008?.recipient_block || data.sender_name;
+      document.getElementById('doc-date').innerText = data.din5008?.date_place || ('den ' + new Date().toLocaleDateString('de-DE'));
+      document.getElementById('doc-subject').innerText = data.din5008?.subject || 'Ihre Mitteilung';
+      document.getElementById('doc-body').innerText = `${data.din5008?.salutation || 'Sehr geehrte Damen und Herren,'}\n\n${data.din5008?.body_paragraphs || ''}`;
+      document.getElementById('doc-signature').innerText = userName;
+      document.getElementById('doc-attachments').innerText = data.din5008?.attachments || 'Anlage(n)';
+
+      document.getElementById('results-section').classList.remove('hidden');
+      document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function copyLetter() {
+      const text = document.getElementById('printable-letter').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Skopiowano treść pisma DIN 5008 do schowka.');
+      });
+    }
+  </script>
+</body>
+</html>
