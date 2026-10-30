@@ -1,3 +1,4 @@
+<!-- File: index.html -->
 <!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -40,9 +41,9 @@
           <p class="text-[10px] text-blue-200">Asystent pism urzędowych DIN 5008</p>
         </div>
       </div>
-      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-        Darmowy
-      </span>
+      <button onclick="changeServerUrl()" class="text-[11px] bg-blue-800 hover:bg-blue-700 px-2.5 py-1 rounded-lg border border-blue-600 transition">
+        ⚙️ Serwer
+      </button>
     </div>
   </header>
 
@@ -101,9 +102,10 @@
       </button>
     </section>
 
-    <div id="loading-spinner" class="hidden text-center py-8 space-y-3">
-      <div class="inline-block animate-spin rounded-full h-9 w-9 border-4 border-blue-700 border-t-transparent"></div>
-      <p class="text-xs font-semibold text-slate-700">Analiza pisma przez AI i generowanie odpowiedzi DIN 5008...</p>
+    <div id="loading-spinner" class="hidden text-center py-8 space-y-3 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+      <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-700 border-t-transparent"></div>
+      <p id="loading-status-text" class="text-xs font-bold text-slate-800">Przesyłanie zdjęcia dokumentu do analizy...</p>
+      <p id="loading-timer" class="text-[11px] font-mono text-slate-400">Czas: 0s</p>
     </div>
 
     <section id="results-section" class="hidden space-y-4">
@@ -195,12 +197,22 @@
   </main>
 
   <script>
-    // =========================================================================
-    // WKLEJ TUTAJ SWÓJ ADRES Z CLOUDFLARE:
-    const WORKER_URL = "https://brief-api.easy-peasygmail.workers.dev";
-    // =========================================================================
+    function getWorkerUrl() {
+      return localStorage.getItem('CF_WORKER_URL') || '';
+    }
+
+    function changeServerUrl() {
+      const current = getWorkerUrl();
+      const entered = prompt("Wklej swój adres Cloudflare Worker (np. https://brief-api.twoja-nazwa.workers.dev):", current);
+      if (entered !== null && entered.trim() !== "") {
+        let cleanUrl = entered.trim().replace(/\/+$/, "");
+        localStorage.setItem('CF_WORKER_URL', cleanUrl);
+        alert("Zapisano adres serwera:\n" + cleanUrl);
+      }
+    }
 
     let currentBase64Image = null;
+    let timerInterval = null;
 
     function handleFileSelect(event) {
       const file = event.target.files[0];
@@ -213,7 +225,7 @@
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
 
-          const MAX_SIZE = 1600;
+          const MAX_SIZE = 1200;
           let width = img.width;
           let height = img.height;
 
@@ -229,7 +241,7 @@
           canvas.height = height;
           ctx.drawImage(img, 0, 0, width, height);
 
-          const compressed = canvas.toDataURL('image/jpeg', 0.82);
+          const compressed = canvas.toDataURL('image/jpeg', 0.75);
           currentBase64Image = compressed.split(',')[1];
 
           document.getElementById('image-preview').src = compressed;
@@ -252,9 +264,11 @@
         return;
       }
 
-      if (WORKER_URL.includes("twoj-worker")) {
-        alert('Wklej swój adres Cloudflare Worker w pliku index.html w zmiennej WORKER_URL.');
-        return;
+      let workerUrl = getWorkerUrl();
+      if (!workerUrl) {
+        changeServerUrl();
+        workerUrl = getWorkerUrl();
+        if (!workerUrl) return;
       }
 
       const intent = document.getElementById('user-intent').value;
@@ -265,8 +279,16 @@
       document.getElementById('loading-spinner').classList.remove('hidden');
       document.getElementById('results-section').classList.add('hidden');
 
+      let seconds = 0;
+      const timerText = document.getElementById('loading-timer');
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        seconds++;
+        timerText.innerText = `Czas: ${seconds}s`;
+      }, 1000);
+
       try {
-        const response = await fetch(WORKER_URL, {
+        const response = await fetch(workerUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -275,17 +297,28 @@
           })
         });
 
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || 'Błąd połączenia z serwerem');
+        const responseText = await response.text();
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (e) {
+          throw new Error("Odpowiedź serwera: " + responseText);
         }
 
-        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Błąd połączenia');
+        }
+
         renderResults(result, userName, userAddress);
 
       } catch (err) {
-        alert('Błąd przetwarzania pisma: ' + err.message);
+        if (err.message.includes('Failed to fetch')) {
+          alert('BŁĄD POŁĄCZENIA: Aplikacja nie może dotrzeć pod Twój adres serwera:\n' + workerUrl + '\n\nKliknij przycisk ⚙️ Serwer na samej górze i upewnij się, że wkleiłeś poprawny link z Cloudflare.');
+        } else {
+          alert('Informacja: ' + err.message);
+        }
       } finally {
+        clearInterval(timerInterval);
         document.getElementById('btn-analyze').disabled = false;
         document.getElementById('loading-spinner').classList.add('hidden');
       }
