@@ -26,26 +26,51 @@
         margin: 0;
         padding: 20mm;
         box-shadow: none;
+        border: none;
       }
     }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-12 select-none">
 
+  <!-- Nagłówek -->
   <header class="bg-blue-900 text-white shadow-md sticky top-0 z-30">
     <div class="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
       <div class="flex items-center gap-2.5">
-        <img src="icon.svg" alt="Logo" class="w-8 h-8 rounded-lg shadow-sm">
+        <img src="icon.svg" alt="Logo" onerror="this.style.display='none'" class="w-8 h-8 rounded-lg shadow-sm">
         <div>
           <h1 class="text-base font-bold tracking-tight leading-tight">BriefAssistent DE</h1>
           <p class="text-[10px] text-blue-200">Asystent pism urzędowych DIN 5008</p>
         </div>
       </div>
-      <button onclick="changeServerUrl()" class="text-[11px] bg-blue-800 hover:bg-blue-700 px-2.5 py-1 rounded-lg border border-blue-600 transition">
-        ⚙️ Serwer
+      <button type="button" onclick="openServerModal()" class="text-[11px] bg-blue-800 hover:bg-blue-700 px-3 py-1.5 rounded-lg border border-blue-600 transition flex items-center gap-1">
+        <span>⚙️</span> <span>Serwer</span>
       </button>
     </div>
   </header>
+
+  <!-- Modal ustawień serwera Cloudflare Worker (działa nawet gdy PWA blokuje prompt()) -->
+  <div id="server-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl border border-slate-200 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-sm font-bold text-slate-900">⚙️ Konfiguracja serwera Cloudflare</h3>
+        <button type="button" onclick="closeServerModal()" class="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        Wklej adres URL swojego Cloudflare Workera (np. <code class="bg-slate-100 px-1 py-0.5 rounded text-blue-700">https://brief-api.twoja-nazwa.workers.dev</code>):
+      </p>
+      <input type="url" id="worker-url-input" placeholder="https://..." class="w-full text-xs p-3 border border-slate-300 rounded-xl outline-none focus:border-blue-600 font-mono">
+      <div id="server-test-status" class="hidden text-xs p-2.5 rounded-lg"></div>
+      <div class="flex gap-2 justify-end pt-1">
+        <button type="button" onclick="testServerConnection()" class="px-3 py-2 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold transition">
+          🔍 Testuj połączenie
+        </button>
+        <button type="button" onclick="saveServerUrl()" class="px-4 py-2 text-xs bg-blue-700 hover:bg-blue-800 text-white rounded-xl font-semibold transition">
+          💾 Zapisz adres
+        </button>
+      </div>
+    </div>
+  </div>
 
   <main class="max-w-2xl mx-auto px-4 py-5 space-y-5">
 
@@ -55,25 +80,46 @@
         Wgraj zdjęcie otrzymanego pisma
       </h2>
 
+      <!-- Kafelki wgrywania z natywnym pokryciem dotykowym (rozwiązuje bug braku reakcji na telefonie) -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label class="flex flex-col items-center justify-center border-2 border-dashed border-blue-300 bg-blue-50/40 hover:bg-blue-50 rounded-xl p-4 cursor-pointer transition text-center active:scale-[0.98]">
-          <span class="text-3xl mb-1">📸</span>
-          <span class="text-xs font-semibold text-blue-950">Aparat w telefonie</span>
-          <span class="text-[10px] text-blue-600 mt-0.5">Zrób ostre zdjęcie pisma</span>
-          <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleFileSelect(event)">
-        </label>
+        <div class="relative flex flex-col items-center justify-center border-2 border-dashed border-blue-300 bg-blue-50/40 hover:bg-blue-50 rounded-xl p-4 transition text-center active:scale-[0.98] overflow-hidden">
+          <span class="text-3xl mb-1 pointer-events-none">📸</span>
+          <span class="text-xs font-semibold text-blue-950 pointer-events-none">Aparat w telefonie</span>
+          <span class="text-[10px] text-blue-600 mt-0.5 pointer-events-none">Zrób ostre zdjęcie pisma</span>
+          <input 
+            type="file" 
+            id="input-camera"
+            accept="image/*" 
+            capture="environment" 
+            class="
+            absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+            onchange="handleFileSelect(event)"
+          >
+        </div>
 
-        <label class="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:bg-slate-50 rounded-xl p-4 cursor-pointer transition text-center active:scale-[0.98]">
-          <span class="text-3xl mb-1">📁</span>
-          <span class="text-xs font-semibold text-slate-800">Wybierz z galerii</span>
-          <span class="text-[10px] text-slate-500 mt-0.5">Pliki JPG, PNG</span>
-          <input type="file" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
-        </label>
+        <div class="relative flex flex-col items-center justify-center border-2 border-dashed border-slate-300 hover:bg-slate-50 rounded-xl p-4 transition text-center active:scale-[0.98] overflow-hidden">
+          <span class="text-3xl mb-1 pointer-events-none">📁</span>
+          <span class="text-xs font-semibold text-slate-800 pointer-events-none">Wybierz z galerii</span>
+          <span class="text-[10px] text-slate-500 mt-0.5 pointer-events-none">Pliki JPG, PNG, WebP</span>
+          <input 
+            type="file" 
+            id="input-gallery"
+            accept="image/*" 
+            class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+            onchange="handleFileSelect(event)"
+          >
+        </div>
       </div>
 
-      <div id="image-preview-container" class="hidden relative rounded-xl overflow-hidden border border-slate-200 bg-slate-900/5 max-h-52 flex items-center justify-center">
-        <img id="image-preview" src="" alt="Podgląd pisma" class="max-h-52 object-contain">
-        <button onclick="clearImage()" class="absolute top-2 right-2 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs">✕</button>
+      <!-- Pasek statusu wgrywania / błędów na ekranie telefonu -->
+      <div id="upload-status-bar" class="hidden text-xs px-3 py-2 rounded-xl border font-medium flex items-center justify-between">
+        <span id="upload-status-msg">Status...</span>
+      </div>
+
+      <!-- Kontener podglądu zdjęcia -->
+      <div id="image-preview-container" class="hidden relative rounded-xl overflow-hidden border border-slate-200 bg-slate-900/5 max-h-60 flex flex-col items-center justify-center p-2">
+        <img id="image-preview" src="" alt="Podgląd pisma" class="max-h-52 object-contain rounded-lg">
+        <button type="button" onclick="clearImage()" class="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 flex items-center justify-center text-xs shadow-md font-bold">✕</button>
       </div>
 
       <div class="space-y-1">
@@ -89,22 +135,22 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100">
         <div>
           <label class="text-[11px] font-medium text-slate-500 block mb-1">Twoje Imię i Nazwisko:</label>
-          <input type="text" id="user-name" placeholder="np. Jan Kowalski" class="w-full text-xs p-2.5 border rounded-lg outline-none focus:border-blue-600">
+          <input type="text" id="user-name" placeholder="np. Jan Kowalski" class="w-full text-xs p-2.5 border rounded-lg outline-none focus:border-blue-600 select-text">
         </div>
         <div>
           <label class="text-[11px] font-medium text-slate-500 block mb-1">Twój adres w Niemczech:</label>
-          <input type="text" id="user-address" placeholder="np. Musterstraße 12, 50667 Köln" class="w-full text-xs p-2.5 border rounded-lg outline-none focus:border-blue-600">
+          <input type="text" id="user-address" placeholder="np. Musterstraße 12, 50667 Köln" class="w-full text-xs p-2.5 border rounded-lg outline-none focus:border-blue-600 select-text">
         </div>
       </div>
 
-      <button id="btn-analyze" onclick="processDocument()" class="w-full py-3.5 bg-blue-700 hover:bg-blue-800 active:scale-[0.99] text-white font-semibold text-sm rounded-xl shadow-md transition flex justify-center items-center gap-2">
+      <button type="button" id="btn-analyze" onclick="processDocument()" class="w-full py-3.5 bg-blue-700 hover:bg-blue-800 active:scale-[0.99] text-white font-semibold text-sm rounded-xl shadow-md transition flex justify-center items-center gap-2 disabled:opacity-50">
         <span>🚀</span> Przeanalizuj i przygotuj pismo
       </button>
     </section>
 
     <div id="loading-spinner" class="hidden text-center py-8 space-y-3 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
       <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-700 border-t-transparent"></div>
-      <p id="loading-status-text" class="text-xs font-bold text-slate-800">Przesyłanie zdjęcia dokumentu do analizy...</p>
+      <p id="loading-status-text" class="text-xs font-bold text-slate-800">Przesyłanie zdjęcia dokumentu do analizy AI...</p>
       <p id="loading-timer" class="text-[11px] font-mono text-slate-400">Czas: 0s</p>
     </div>
 
@@ -150,10 +196,10 @@
             Gotowa odpowiedź (Format DIN 5008)
           </h2>
           <div class="flex gap-2">
-            <button onclick="copyLetter()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition flex items-center gap-1">
+            <button type="button" onclick="copyLetter()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition flex items-center gap-1">
               📋 Kopiuj
             </button>
-            <button onclick="window.print()" class="px-3 py-1.5 text-xs bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-medium shadow-sm transition flex items-center gap-1">
+            <button type="button" onclick="window.print()" class="px-3 py-1.5 text-xs bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-medium shadow-sm transition flex items-center gap-1">
               🖨️ Zapisz PDF
             </button>
           </div>
@@ -197,83 +243,196 @@
   </main>
 
   <script>
-    function getWorkerUrl() {
-      return localStorage.getItem('CF_WORKER_URL') || '';
-    }
-
-    function changeServerUrl() {
-      const current = getWorkerUrl();
-      const entered = prompt("Wklej swój adres Cloudflare Worker (np. https://brief-api.twoja-nazwa.workers.dev):", current);
-      if (entered !== null && entered.trim() !== "") {
-        let cleanUrl = entered.trim().replace(/\/+$/, "");
-        localStorage.setItem('CF_WORKER_URL', cleanUrl);
-        alert("Zapisano adres serwera:\n" + cleanUrl);
-      }
-    }
-
     let currentBase64Image = null;
     let timerInterval = null;
 
-    function handleFileSelect(event) {
-      const file = event.target.files[0];
+    function getWorkerUrl() {
+      return (localStorage.getItem('CF_WORKER_URL') || '').trim().replace(/\/+$/, '');
+    }
+
+    function showUploadStatus(message, type = 'info') {
+      const bar = document.getElementById('upload-status-bar');
+      const msg = document.getElementById('upload-status-msg');
+      bar.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-800', 'border-emerald-200', 'bg-red-50', 'text-red-800', 'border-red-200', 'bg-blue-50', 'text-blue-800', 'border-blue-200');
+      
+      if (type === 'success') {
+        bar.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
+      } else if (type === 'error') {
+        bar.classList.add('bg-red-50', 'text-red-800', 'border-red-200');
+      } else {
+        bar.classList.add('bg-blue-50', 'text-blue-800', 'border-blue-200');
+      }
+      msg.innerText = message;
+    }
+
+    function openServerModal() {
+      document.getElementById('worker-url-input').value = getWorkerUrl();
+      document.getElementById('server-test-status').classList.add('hidden');
+      document.getElementById('server-modal').classList.remove('hidden');
+    }
+
+    function closeServerModal() {
+      document.getElementById('server-modal').classList.add('hidden');
+    }
+
+    function saveServerUrl() {
+      const val = document.getElementById('worker-url-input').value.trim().replace(/\/+$/, '');
+      if (!val) {
+        alert('Wpisz poprawny adres URL zaczynający się od https://');
+        return;
+      }
+      localStorage.setItem('CF_WORKER_URL', val);
+      closeServerModal();
+      showUploadStatus('✅ Zapisano adres serwera: ' + val, 'success');
+    }
+
+    async function testServerConnection() {
+      const statusEl = document.getElementById('server-test-status');
+      const url = document.getElementById('worker-url-input').value.trim().replace(/\/+$/, '');
+      statusEl.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-800', 'bg-red-50', 'text-red-800');
+      
+      if (!url) {
+        statusEl.classList.add('bg-red-50', 'text-red-800');
+        statusEl.innerText = '❌ Wpisz najpierw adres URL powyżej.';
+        return;
+      }
+
+      statusEl.classList.add('bg-blue-50', 'text-blue-800');
+      statusEl.innerText = '⏳ Sprawdzanie połączenia z Workerem...';
+
+      try {
+        const res = await fetch(url, { method: 'GET' });
+        const data = await res.json();
+        if (res.ok && data.status === 'online') {
+          statusEl.className = 'text-xs p-2.5 rounded-lg bg-emerald-50 text-emerald-800 font-medium';
+          statusEl.innerText = `✅ Połączenie działa! Klucz Gemini API: ${data.hasApiKey ? 'SKONFIGUROWANY' : 'BRAK KLUCZA W CLOUDFLARE!'}`;
+        } else {
+          statusEl.className = 'text-xs p-2.5 rounded-lg bg-red-50 text-red-800 font-medium';
+          statusEl.innerText = '⚠️ Serwer odpowiedział, ale zwrócił status: ' + res.status;
+        }
+      } catch (err) {
+        statusEl.className = 'text-xs p-2.5 rounded-lg bg-red-50 text-red-800 font-medium';
+        statusEl.innerText = '❌ Nie można połączyć się z tym adresem. Sprawdź czy link jest poprawny.';
+      }
+    }
+
+    async function handleFileSelect(event) {
+      const input = event.target;
+      const file = input.files && input.files[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const img = new Image();
-        img.onload = function() {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
+      showUploadStatus(`⏳ Przetwarzanie zdjęcia: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)...`, 'info');
 
-          const MAX_SIZE = 1200;
-          let width = img.width;
-          let height = img.height;
+      try {
+        const MAX_SIZE = 1500;
+        let width, height, drawable;
 
-          if (width > height && width > MAX_SIZE) {
-            height *= MAX_SIZE / width;
-            width = MAX_SIZE;
-          } else if (height > MAX_SIZE) {
-            width *= MAX_SIZE / height;
-            height = MAX_SIZE;
+        // Metoda 1: Nowoczesny, niskopamięciowy createImageBitmap (nie zawiesza telefonów przy zdjęciach 12MP+)
+        if (window.createImageBitmap) {
+          try {
+            drawable = await createImageBitmap(file);
+            width = drawable.width;
+            height = drawable.height;
+          } catch (bmpErr) {
+            drawable = null;
           }
+        }
 
-          canvas.width = width;
-          canvas.height = height;
-          ctx.drawImage(img, 0, 0, width, height);
+        // Metoda 2 (Fallback): Klasyczny obiekt Image z URL.createObjectURL
+        if (!drawable) {
+          drawable = await new Promise((resolve, reject) => {
+            const img = new Image();
+            const objectUrl = URL.createObjectURL(file);
+            img.onload = () => {
+              URL.revokeObjectURL(objectUrl);
+              resolve(img);
+            };
+            img.onerror = () => {
+              URL.revokeObjectURL(objectUrl);
+              reject(new Error('Nieobsługiwany format obrazu (np. surowy plik HEIC). Zrób zdjęcie bezpośrednio aparatem lub użyj pliku JPG/PNG.'));
+            };
+            img.src = objectUrl;
+          });
+          width = drawable.width;
+          height = drawable.height;
+        }
 
-          const compressed = canvas.toDataURL('image/jpeg', 0.75);
-          currentBase64Image = compressed.split(',')[1];
+        // Skalowanie z zachowaniem proporcji i pełnym zaokrągleniem do liczb całkowitych
+        if (width > height && width > MAX_SIZE) {
+          height = Math.round((height * MAX_SIZE) / width);
+          width = MAX_SIZE;
+        } else if (height > MAX_SIZE) {
+          width = Math.round((width * MAX_SIZE) / height);
+          height = MAX_SIZE;
+        }
 
-          document.getElementById('image-preview').src = compressed;
-          document.getElementById('image-preview-container').classList.remove('hidden');
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        // Białe tło dla przejrzystości i lepszego kontrastu OCR
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(drawable, 0, 0, width, height);
+
+        if (drawable.close) {
+          drawable.close();
+        }
+
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        const cleanBase64 = compressedDataUrl.split(',')[1];
+
+        if (!cleanBase64 || cleanBase64.length < 100) {
+          throw new Error('Wygenerowany obraz jest pusty. Spróbuj ponownie.');
+        }
+
+        currentBase64Image = cleanBase64;
+        const sizeKB = Math.round((cleanBase64.length * 3) / 4 / 1024);
+
+        document.getElementById('image-preview').src = compressedDataUrl;
+        document.getElementById('image-preview-container').classList.remove('hidden');
+        showUploadStatus(`✅ Zdjęcie gotowe (${width}x${height}px, ${sizeKB} KB). Kliknij „Przeanalizuj” poniżej!`, 'success');
+
+      } catch (err) {
+        currentBase64Image = null;
+        showUploadStatus('❌ Błąd zdjęcia: ' + err.message, 'error');
+        alert('Błąd podczas wczytywania zdjęcia:\n' + err.message);
+      } finally {
+        // KRYTYCZNE: Resetujemy wartość inputu, by można było wybrać ten sam plik ponownie
+        input.value = '';
+      }
     }
 
     function clearImage() {
       currentBase64Image = null;
       document.getElementById('image-preview-container').classList.add('hidden');
       document.getElementById('image-preview').src = '';
+      document.getElementById('upload-status-bar').classList.add('hidden');
+      document.getElementById('input-camera').value = '';
+      document.getElementById('input-gallery').value = '';
     }
 
     async function processDocument() {
       if (!currentBase64Image) {
+        showUploadStatus('⚠️ Najpierw zrób zdjęcie pisma lub wybierz je z galerii!', 'error');
         alert('Proszę najpierw zrobić lub wybrać zdjęcie pisma urzędowego.');
         return;
       }
 
-      let workerUrl = getWorkerUrl();
+      const workerUrl = getWorkerUrl();
       if (!workerUrl) {
-        changeServerUrl();
-        workerUrl = getWorkerUrl();
-        if (!workerUrl) return;
+        openServerModal();
+        return;
       }
 
       const intent = document.getElementById('user-intent').value;
-      const userName = document.getElementById('user-name').value.trim() || 'Imię i Nazwisko';
-      const userAddress = document.getElementById('user-address').value.trim() || 'Musterstraße 1, 50667 Köln';
+      const userName = document.getElementById('user-name').value.trim() || 'Jan Kowalski';
+      const userAddress = document.getElementById('user-address').value.trim() || 'Musterstraße 12, 50667 Köln';
+
+      // Zapisz dane użytkownika lokalnie dla wygody przy kolejnych pismach
+      localStorage.setItem('USER_NAME', userName);
+      localStorage.setItem('USER_ADDRESS', userAddress);
 
       document.getElementById('btn-analyze').disabled = true;
       document.getElementById('loading-spinner').classList.remove('hidden');
@@ -293,7 +452,9 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             imageBase64: currentBase64Image,
-            intent: intent
+            intent: intent,
+            userName: userName,
+            userAddress: userAddress
           })
         });
 
@@ -302,20 +463,22 @@
         try {
           result = JSON.parse(responseText);
         } catch (e) {
-          throw new Error("Odpowiedź serwera: " + responseText);
+          throw new Error('Nieprawidłowa odpowiedź serwera: ' + responseText.slice(0, 200));
         }
 
         if (!response.ok) {
-          throw new Error(result.error || 'Błąd połączenia');
+          throw new Error(result.error || 'Błąd serwera (' + response.status + ')');
         }
 
         renderResults(result, userName, userAddress);
 
       } catch (err) {
-        if (err.message.includes('Failed to fetch')) {
-          alert('BŁĄD POŁĄCZENIA: Aplikacja nie może dotrzeć pod Twój adres serwera:\n' + workerUrl + '\n\nKliknij przycisk ⚙️ Serwer na samej górze i upewnij się, że wkleiłeś poprawny link z Cloudflare.');
+        if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+          showUploadStatus('❌ Błąd połączenia z serwerem Cloudflare Worker.', 'error');
+          alert('BŁĄD POŁĄCZENIA: Aplikacja nie może połączyć się z serwerem:\n' + workerUrl + '\n\nKliknij przycisk „⚙️ Serwer” na górze i przetestuj połączenie.');
         } else {
-          alert('Informacja: ' + err.message);
+          showUploadStatus('❌ ' + err.message, 'error');
+          alert('Wystąpił błąd podczas analizy:\n' + err.message);
         }
       } finally {
         clearInterval(timerInterval);
@@ -326,9 +489,9 @@
 
     function renderResults(data, userName, userAddress) {
       document.getElementById('res-sender').innerText = data.sender_name || 'Instytucja urzędowa';
-      document.getElementById('res-aktenzeichen').innerText = data.aktenzeichen || 'Nie odnaleziono w tekście';
-      document.getElementById('res-deadline').innerText = data.deadline || 'Brak ścisłej daty';
-      document.getElementById('res-action').innerText = data.required_action || 'Brak jednoznacznego żądania';
+      document.getElementById('res-aktenzeichen').innerText = data.aktenzeichen || 'Brak / nie znaleziono';
+      document.getElementById('res-deadline').innerText = data.deadline || 'Brak ścisłego terminu';
+      document.getElementById('res-action').innerText = data.required_action || 'Zapoznaj się z treścią';
       document.getElementById('res-summary').innerText = data.summary_pl || '';
 
       const badge = document.getElementById('badge-deadline');
@@ -336,17 +499,17 @@
         badge.className = "text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-red-100 text-red-700";
         badge.innerText = "Pilny termin!";
       } else {
-        badge.className = "text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700";
+        badge.className = "text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700";
         badge.innerText = "Bieg standardowy";
       }
 
       document.getElementById('doc-sender-line').innerText = `${userName} · ${userAddress}`;
-      document.getElementById('doc-recipient').innerText = data.din5008?.recipient_block || data.sender_name;
+      document.getElementById('doc-recipient').innerText = data.din5008?.recipient_block || data.sender_name || 'Urząd';
       document.getElementById('doc-date').innerText = data.din5008?.date_place || ('den ' + new Date().toLocaleDateString('de-DE'));
-      document.getElementById('doc-subject').innerText = data.din5008?.subject || 'Ihre Mitteilung';
+      document.getElementById('doc-subject').innerText = data.din5008?.subject || 'Ihr Schreiben';
       document.getElementById('doc-body').innerText = `${data.din5008?.salutation || 'Sehr geehrte Damen und Herren,'}\n\n${data.din5008?.body_paragraphs || ''}`;
       document.getElementById('doc-signature').innerText = userName;
-      document.getElementById('doc-attachments').innerText = data.din5008?.attachments || 'Anlage(n)';
+      document.getElementById('doc-attachments').innerText = data.din5008?.attachments || '';
 
       document.getElementById('results-section').classList.remove('hidden');
       document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
@@ -358,6 +521,14 @@
         alert('Skopiowano treść pisma DIN 5008 do schowka.');
       });
     }
+
+    // Przywrócenie zapisanego imienia i adresu po starcie aplikacji
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedName = localStorage.getItem('USER_NAME');
+      const savedAddr = localStorage.getItem('USER_ADDRESS');
+      if (savedName) document.getElementById('user-name').value = savedName;
+      if (savedAddr) document.getElementById('user-address').value = savedAddr;
+    });
   </script>
 </body>
 </html>
